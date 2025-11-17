@@ -1,0 +1,6 @@
+myenv/
+__pycache__/
+.env
+*.pyc
+
+usb_music_metadata.json
