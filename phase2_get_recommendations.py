@@ -3,18 +3,12 @@ import json
 import re
 from google import generativeai as genai
 
-
-# ------------------------------------------------------------
-# CONFIG
-# ------------------------------------------------------------
 genai.configure(api_key=os.getenv("GENAI_API_KEY"))
 MODEL_NAME = "gemini-flash-latest"
 CHUNK_SIZE = 50  # number of songs per Gemini request
 
 
-# ------------------------------------------------------------
-# Load metadata from Phase 1 output
-# ------------------------------------------------------------
+
 def load_metadata():
     print("Loading MP3 metadata from USB scan...")
     with open("usb_music_metadata.json", "r", encoding="utf-8") as f:
@@ -23,17 +17,11 @@ def load_metadata():
     return data
 
 
-# ------------------------------------------------------------
-# Utility to chunk list into smaller groups
-# ------------------------------------------------------------
 def chunks(lst, size):
     for i in range(0, len(lst), size):
         yield lst[i:i + size]
 
 
-# ------------------------------------------------------------
-# Extract first JSON object from Gemini output
-# ------------------------------------------------------------
 def extract_json(text):
     """
     Extract the first valid JSON object from a string.
@@ -48,9 +36,6 @@ def extract_json(text):
     return None
 
 
-# ------------------------------------------------------------
-# Summarize a batch of songs safely
-# ------------------------------------------------------------
 def summarize_batch(batch, model):
     prompt = f"""
 You are analyzing a music library.
@@ -71,7 +56,7 @@ Batch Songs:
 
     response = model.generate_content(prompt)
 
-    # Collect all text parts
+    
     all_text = ""
     for cand in response.candidates:
         for part in cand.content.parts:
@@ -93,9 +78,6 @@ Batch Songs:
     return json_data
 
 
-# ------------------------------------------------------------
-# Get final song recommendations
-# ------------------------------------------------------------
 def get_recommendations(final_profile, model):
     prompt = f"""
 Based on this music taste profile:
@@ -135,9 +117,6 @@ RETURN ONLY JSON:
     return json_data
 
 
-# ------------------------------------------------------------
-# MAIN PROCESS
-# ------------------------------------------------------------
 def main():
     metadata = load_metadata()
     model = genai.GenerativeModel(MODEL_NAME)
@@ -181,8 +160,5 @@ def main():
     print("DONE! Saved recommendations to music_recommendations.json\n")
 
 
-# ------------------------------------------------------------
-# ENTRY POINT
-# ------------------------------------------------------------
 if __name__ == "__main__":
     main()

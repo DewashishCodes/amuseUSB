@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Professional parallel downloader with per-song progress bars (Rich).
 
@@ -36,23 +36,21 @@ from rich.progress import (
 # ----------------- CONFIG -----------------
 USB_PATH = r"E:\AI_Recommendations"   # Change if needed; folder will be created
 RECS_FILE = "music_recommendations.json"
-FFMPEG_PATH = r"D:\ffmpeg-8.0-essentials_build\bin"  # confirmed by you
-MAX_THREADS = 5   # per your instruction
+FFMPEG_PATH = r"D:\ffmpeg-8.0-essentials_build\bin" #<-- Your ffmpeg bin path here
+MAX_THREADS = 5   
 RETRY_LIMIT = 3
-# ------------------------------------------
 
-# Thread-safe mapping of our internal task ids to Rich task ids
 task_map_lock = threading.Lock()
-task_map = {}  # maps unique_id -> rich_task_id
+task_map = {}  
 
-# sanitize filename
+
 def sanitize_filename(name: str) -> str:
     name = re.sub(r'[\\/*?:"<>|]', "_", name)
     name = re.sub(r"\s+", " ", name).strip()
     return name[:180]
 
 
-# Robust search with fallbacks
+
 def search_youtube(query: str) -> Optional[str]:
     """
     Try several yt-dlp search variants; return first good YouTube watch URL or None.
@@ -80,44 +78,44 @@ def search_youtube(query: str) -> Optional[str]:
             continue
 
         entries = info.get("entries") if isinstance(info, dict) else None
-        # if single result, info may be direct dict
+        
         if entries is None:
             entries = [info]
 
         if not entries:
             continue
 
-        # prefer entries that look like videos (have id/webpage_url)
+        
         for entry in entries:
             if not entry:
                 continue
             vid_id = entry.get("id") or entry.get("url") or entry.get("webpage_url")
-            # sometimes extract_flat returns 'url' as video id; try to form watch url
+            
             if not vid_id:
                 continue
-            # if it's already a full url:
+            
             if vid_id.startswith("http"):
                 return vid_id
-            # otherwise assume YouTube id
+        
             return f"https://www.youtube.com/watch?v={vid_id}"
 
     return None
 
 
-# progress hook to update Rich
+
 def make_progress_hook(unique_id: str, progress: Progress):
     def hook(d):
-        # Called by yt-dlp in the download thread
+        
         with task_map_lock:
             rich_task_id = task_map.get(unique_id)
-        # sometimes total bytes are unknown; set total only when available
+        
         if rich_task_id is None:
             return
         status = d.get("status")
         if status == "downloading":
             downloaded = d.get("downloaded_bytes") or d.get("downloaded_bytes", 0)
             total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
-            # update total only if > 0
+            
             if total and progress.tasks[rich_task_id].total != total:
                 try:
                     progress.update(rich_task_id, total=total)
@@ -128,7 +126,7 @@ def make_progress_hook(unique_id: str, progress: Progress):
             except Exception:
                 pass
         elif status == "finished":
-            # mark done: set completed to total if possible
+            
             total = d.get("total_bytes") or d.get("total_bytes_estimate") or progress.tasks[rich_task_id].total
             if total:
                 try:
@@ -138,7 +136,7 @@ def make_progress_hook(unique_id: str, progress: Progress):
     return hook
 
 
-# download single song (search + download), updates Rich progress via hooks
+
 def download_one(rec: dict, progress: Progress, overall_task_id: int) -> bool:
     title = rec.get("song") or rec.get("title") or ""
     artist = rec.get("artist", "")
@@ -146,23 +144,22 @@ def download_one(rec: dict, progress: Progress, overall_task_id: int) -> bool:
     pretty_name = f"{title} - {artist}" if artist else title
     safe_name = sanitize_filename(pretty_name) or sanitize_filename(title) or "track"
 
-    # Create a Rich task for this file (unknown total initially)
+    
     task_desc = pretty_name if pretty_name else query
     task_id = progress.add_task(f"[cyan]{task_desc}", total=0)
 
-    # register mapping for progress hook
+    
     unique_id = f"{int(time.time() * 1000)}-{threading.get_ident()}-{safe_name}"
     with task_map_lock:
         task_map[unique_id] = task_id
 
-    # ensure USB dir exists
+    
     Path(USB_PATH).mkdir(parents=True, exist_ok=True)
 
-    # attempt download with retries
+    
     last_err = None
     for attempt in range(1, RETRY_LIMIT + 1):
         try:
-            # Resolve URL
             progress.console.print(f"[bold]Searching:[/] {query} (attempt {attempt})")
             url = search_youtube(query)
             if not url:
@@ -171,7 +168,6 @@ def download_one(rec: dict, progress: Progress, overall_task_id: int) -> bool:
                 time.sleep(0.5)
                 continue
 
-            # build yt-dlp options with progress hook closure
             outtmpl = os.path.join(USB_PATH, safe_name + ".%(ext)s")
             ydl_opts = {
                 "format": "bestaudio/best",
@@ -186,17 +182,17 @@ def download_one(rec: dict, progress: Progress, overall_task_id: int) -> bool:
                 "progress_hooks": [make_progress_hook(unique_id, progress)],
             }
 
-            # perform download
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
 
-            # Mark overall progress
+           
             progress.advance(overall_task_id)
             progress.console.print(f"[green]✔ Downloaded:[/] {safe_name}.mp3")
-            # cleanup mapping for this task
+            
             with task_map_lock:
                 task_map.pop(unique_id, None)
-            # remove the task bar
+            
             try:
                 progress.remove_task(task_id)
             except Exception:
@@ -220,7 +216,7 @@ def download_one(rec: dict, progress: Progress, overall_task_id: int) -> bool:
 
 
 def main():
-    # load recommendations
+    
     if not os.path.exists(RECS_FILE):
         print(f"ERROR: {RECS_FILE} not found. Place the recommendations JSON in the same folder.")
         return
@@ -237,7 +233,7 @@ def main():
     Path(USB_PATH).mkdir(parents=True, exist_ok=True)
     print(f"\nStarting downloads: {total} songs → {USB_PATH}\n")
 
-    # Rich progress manager — per-song bars + overall bar
+    
     progress = Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]{task.description}"),
