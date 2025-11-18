@@ -1,4 +1,4 @@
-# amuseUSB
+<img src="./amuseusb.png" width="max" >
 
 **amuseUSB** is an intelligent, automated USB music loader that scans
 your existing songs, gathers metadata, generates AI-based personalized
